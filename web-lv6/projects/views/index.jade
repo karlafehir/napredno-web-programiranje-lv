@@ -1,0 +1,61 @@
+extends layout
+
+block content
+    h1= title
+    p Welcome to our test
+
+    #wrapper
+        #projectInfo
+            h2 Project Info
+            p
+                strong Name:
+                |  <span id='name'></span>
+                br
+                strong Job Description:
+                |  <span id='description'></span>
+                br
+                strong Price:
+                |  <span id='price'></span>
+                br
+                strong Finished Works:
+                |  <span id='finishedWorks'></span>
+                br
+                strong Members:
+                |  <span id='members'></span>
+                br
+                strong Start Time:
+                |  <span id='startTime'></span>
+                br
+                strong End Time:
+                |  <span id='endTime'></span>
+        h2 Project List
+        #projectList
+            table
+                thead
+                    th Name
+                    th Description
+                    th Price
+                    th Finished Works
+                    th Members
+                    th Start Time
+                    th End Time
+                    th Edit?
+                    th Delete?
+                tbody
+
+        h2 Add Project
+        #addProject
+            fieldset
+                input#inputName(type='text', placeholder='Name')
+                input#inputDescription(type='text', placeholder='Description')
+                br
+                input#inputPrice(type='text', placeholder='Price')
+                input#inputFinishedWorks(type='text', placeholder='Finished works')
+                br
+                input#inputMembers(type='text', placeholder='Members')
+                br
+                input#inputStartTime(type='date', placeholder='Start date')
+                input#inputEndTime(type='date', placeholder='Finish date')
+                br
+                button#btnAddProject Add Project
+      

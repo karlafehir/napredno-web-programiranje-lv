@@ -1,0 +1,48 @@
+extends ../layout
+
+block content
+    h1.
+         #{title}
+
+    form(action='/projects/new', method='get')
+        button(type='submit' class="btn btn-success").
+            ADD PROJECT
+
+    #wrapper
+
+    #projectList
+        table
+            thead
+                th Name
+                th Description
+                th Price
+                th Members
+                th FinishedWorks
+                th StartTime
+                th EndTime
+                th Details
+                th Edit?
+                th Delete?
+            tbody
+                - each project, i in projects
+                    tr
+                        td=project.name
+                        td=project.description
+                        td=project.price
+                        td=project.members
+                        td=project.finishedWorks
+                        td=project.startTime
+                        td=project.endTime
+                        td
+                            form(action='/projects/#{project._id}', method='get')
+                                button(type='submit', class="btn btn-info").
+                                    Show
+                        td
+                            form(action='/projects/edit/#{project._id}', method='get', enctype='application/x-www-form-urlencoded')
+                                button(type='submit', class="btn btn-primary").
+                                    Edit
+                        td
+                            form(action='/projects/edit/#{project._id}', method='post', enctype='application/x-www-form-urlencoded')
+                                input(type='hidden', value='DELETE', name='_method')
+                                button(type='submit', class="btn btn-danger").
+                                    Delete
