@@ -7,5 +7,7 @@ var projectSchema = new mongoose.Schema({
     finishedWorks: String,
     startTime: String,
     endTime: String,
+    archived: Boolean,
+    author: String,
 });
 mongoose.model('Project', projectSchema);

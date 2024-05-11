@@ -1,8 +1,8 @@
 var express = require('express'),
     router = express.Router(),
-    mongoose = require('mongoose'), 
+    mongoose = require('mongoose'),
     bodyParser = require('body-parser'), 
-    methodOverride = require('method-override'); 
+    methodOverride = require('method-override');
 
 router.use(bodyParser.urlencoded({extended: true}))
 router.use(methodOverride(function (req, res) {
@@ -13,34 +13,167 @@ router.use(methodOverride(function (req, res) {
     }
 }))
 
+router.route('/archive')
+    .get(function (req, res, next) {
+        if (redirectIfNotLoggedIn(req, res)) return;
+
+        const uid = req.session.uid.toString();
+
+        mongoose.model('User').findById(uid, function (err, user) {
+            if (err) {
+                return console.error(err);
+            } else {
+                mongoose.model('Project').find( {
+                        archived: true,
+                        $or: [
+                            { author: uid },
+                            {"members" : { '$regex' : user.username, '$options' : 'i' }}
+                        ]
+                    }, function (err, projects) {
+                        if (err) {
+                            return console.error(err);
+                        } else {
+                            res.format({
+                                html: function () {
+                                    res.render('projects/archive', {
+                                        title: 'My Archived Projects',
+                                        "projects": projects
+                                    });
+                                },
+                                json: function () {
+                                    res.json(projects);
+                                }
+                            });
+                        }
+                    });
+            }
+        });
+    })
+
+router.route('/my')
+    .get(function (req, res, next) {
+        if (redirectIfNotLoggedIn(req, res)) return;
+
+        const uid = req.session.uid.toString();
+
+        mongoose.model('User').findById(uid, function (err, user) {
+            if (err) {
+                return console.error(err);
+            } else {
+                mongoose.model('Project').find({author: uid}, function (err, leaderProjects) {
+                    if (err) {
+                        return console.error(err);
+                    } else {
+                        mongoose.model('Project').find({"members" : { '$regex' : user.username, '$options' : 'i' }}, function (err, memberProjects) {
+                            if (err) {
+                                return console.error(err);
+                            } else {
+                                res.format({
+                                    html: function () {
+                                        res.render('projects/my', {
+                                            title: 'My Projects',
+                                            "leaderProjects": leaderProjects,
+                                            "memberProjects": memberProjects,
+                                        });
+                                    },
+                                    json: function () {
+                                        res.json(leaderProjects);
+                                        res.json(memberProjects);
+                                    }
+                                });
+                            }
+                        });
+                    }
+                });
+            }
+        });
+    });
+
+router.route('/delete/:id')
+    .delete(function (req, res) {
+        if (redirectIfNotLoggedIn(req, res)) return;
+
+        mongoose.model('Project').findById(req.params.id, function (err, project) {
+            if (err) {
+                return console.error(err);
+            } else {
+                project.remove(function (err, project) {
+                    if (err) {
+                        return console.error(err);
+                    } else {
+                        console.log('DELETE removing ID: ' + project._id);
+                        res.format({
+                            html: function () {
+                                res.redirect("/projects/my");
+                            },
+                            json: function () {
+                                res.json({
+                                    message: 'deleted',
+                                    item: project
+                                });
+                            }
+                        });
+                    }
+                });
+            }
+        });
+    });
+
 router.route('/')
     .get(function (req, res, next) {
+        if (redirectIfNotLoggedIn(req, res)) return;
+
         mongoose.model('Project').find({}, function (err, projects) {
             if (err) {
                 return console.error(err);
             } else {
-                res.format({
-                    html: function () {
-                        res.render('projects/index', {
-                            title: 'Projects',
-                            "projects": projects
+                mongoose.model('User').find({}, function (err, users) {
+                    if (err) {
+                        return console.error(err);
+                    } else {
+                        for (project of projects) {
+                            for (user of users) {
+                                if (project.author.toString() == user._id.toString()) {
+                                    project.authorName = user.username;
+                                    break;
+                                }
+                            }
+                        }
+
+                        res.format({
+                            html: function () {
+                                res.render('projects/index', {
+                                    title: 'Projects',
+                                    "projects": projects
+                                });
+                            },
+                            json: function () {
+                                res.json(projects);
+                            }
                         });
-                    },
-                    json: function () {
-                        res.json(projects);
                     }
                 });
             }
         });
     })
     .post(function (req, res) {
+        if (redirectIfNotLoggedIn(req, res)) return;
+
         const name = req.body.name;
         const description = req.body.description;
         const price = req.body.price;
-        const members = req.body.members;
+        const _members = req.param('member');
+        let members;
+        if (typeof _members === 'undefined') {
+            members = ""
+        } else {
+            members = _members.toString();
+        }
         const finishedWorks = req.body.finishedWorks;
         const startTime = req.body.startTime;
         const endTime = req.body.endTime;
+        const archived = req.body.archived === "on";
+        const author = req.session.uid;
 
         mongoose.model('Project').create({
             name: name,
@@ -50,6 +183,8 @@ router.route('/')
             finishedWorks: finishedWorks,
             startTime: startTime,
             endTime: endTime,
+            archived: archived,
+            author: author,
         }, function (err, project) {
             if (err) {
                 res.send("There was a problem adding the information to the database.");
@@ -69,23 +204,48 @@ router.route('/')
     });
 
 router.get('/new', function (req, res) {
-    res.render('projects/new', {title: 'New Project'});
+    if (redirectIfNotLoggedIn(req, res)) return;
+
+    const uid = req.session.uid.toString();
+
+    mongoose.model('User').find({_id: { $ne: uid}}, function (err, users) {
+        if (err) {
+            console.log('GET Error: There was a problem retrieving: ' + err);
+        } else {
+            res.render('projects/new', {
+                title: 'New Project',
+                users: users,
+            });
+        }
+    });
 });
 
 router.route('/:id')
     .get(function (req, res) {
-        mongoose.model('Project').findById(req.params.id, function (err, project) {
+        if (redirectIfNotLoggedIn(req, res)) return;
+
+        const uid = req.session.uid.toString();
+
+        mongoose.model('User').findById(uid, function (err, user) {
             if (err) {
-                console.log('GET Error: There was a problem retrieving: ' + err);
+                return console.error(err);
             } else {
-                res.format({
-                    html: function () {
-                        res.render('projects/show', {
-                            "project": project
+                mongoose.model('Project').findById(req.params.id, function (err, project) {
+                    if (err) {
+                        console.log('GET Error: There was a problem retrieving: ' + err);
+                    } else {
+                        res.format({
+                            html: function () {
+                                res.render('projects/show', {
+                                    "project": project,
+                                    "author": user.username,
+                                    "title": "Details",
+                                });
+                            },
+                            json: function () {
+                                res.json(project);
+                            }
                         });
-                    },
-                    json: function () {
-                        res.json(project);
                     }
                 });
             }
@@ -94,32 +254,63 @@ router.route('/:id')
 
 router.route('/edit/:id')
     .get(function (req, res) {
-        mongoose.model('Project').findById(req.params.id, function (err, project) {
+        if (redirectIfNotLoggedIn(req, res)) return;
+
+        const uid = req.session.uid.toString();
+
+        mongoose.model('User').find({_id: { $ne: uid}}, function (err, users) {
             if (err) {
                 console.log('GET Error: There was a problem retrieving: ' + err);
             } else {
-                res.format({
-                    html: function () {
-                        res.render('projects/edit', {
-                            title: 'Project: ' + project._id,
-                            "project": project
+                mongoose.model('Project').findById(req.params.id, function (err, project) {
+                    if (err) {
+                        console.log('GET Error: There was a problem retrieving: ' + err);
+                    } else {
+                        for (user of users) {
+                            const members = project.members;
+                            if (members === "" || members === null) {
+                                user.checked = false;
+                            } else {
+                                user.checked = members.includes(user.username);
+                            }
+                        }
+
+                        res.format({
+                            html: function () {
+                                res.render('projects/edit', {
+                                    title: 'Project: ' + project._id,
+                                    "project": project,
+                                    "users": users,
+                                    "title": "Edit",
+                                });
+                            },
+                            json: function () {
+                                res.json(project);
+                                res.json(users);
+                            }
                         });
-                    },
-                    json: function () {
-                        res.json(project);
                     }
                 });
             }
         });
     })
     .put(function (req, res) {
+        if (redirectIfNotLoggedIn(req, res)) return;
+
         const name = req.body.name;
         const description = req.body.description;
         const price = req.body.price;
-        const members = req.body.members;
+        const _members = req.param('member');
+        let members;
+        if (typeof _members === 'undefined') {
+            members = ""
+        } else {
+            members = _members.toString();
+        }
         const finishedWorks = req.body.finishedWorks;
         const startTime = req.body.startTime;
         const endTime = req.body.endTime;
+        const archived = req.body.archived === "on";
 
         mongoose.model('Project').findById(req.params.id, function (err, project) {
             project.update({
@@ -130,44 +321,91 @@ router.route('/edit/:id')
                 finishedWorks: finishedWorks,
                 startTime: startTime,
                 endTime: endTime,
+                archived: archived,
             }, function (err, projectId) {
                 if (err) {
                     res.send("There was a problem updating the information to the database: " + err);
                 } else {
                     res.format({
                         html: function () {
-                            res.redirect("/projects");
+                            res.redirect("/projects/my");
                         }
                     });
                 }
             })
         });
-    })
-    .delete(function (req, res) {
-        mongoose.model('Project').findById(req.params.id, function (err, project) {
+    });
+
+router.route('/editMember/:id')
+    .get(function (req, res) {
+        if (redirectIfNotLoggedIn(req, res)) return;
+
+        const uid = req.session.uid.toString();
+
+        mongoose.model('User').find({_id: { $ne: uid}}, function (err, users) {
             if (err) {
-                return console.error(err);
+                console.log('GET Error: There was a problem retrieving: ' + err);
             } else {
-                project.remove(function (err, project) {
+                mongoose.model('Project').findById(req.params.id, function (err, project) {
                     if (err) {
-                        return console.error(err);
+                        console.log('GET Error: There was a problem retrieving: ' + err);
                     } else {
-                        console.log('DELETE removing ID: ' + project._id);
+                        for (user of users) {
+                            const members = project.members;
+                            if (members === "" || members === null) {
+                                user.checked = false;
+                            } else {
+                                user.checked = members.includes(user.username);
+                            }
+                        }
+
                         res.format({
                             html: function () {
-                                res.redirect("/projects");
+                                res.render('projects/edit_member', {
+                                    title: 'Project: ' + project._id,
+                                    "project": project,
+                                    "users": users,
+                                    "title": "Edit",
+                                });
                             },
                             json: function () {
-                                res.json({
-                                    message: 'deleted',
-                                    item: project
-                                });
+                                res.json(project);
+                                res.json(users);
                             }
                         });
                     }
                 });
             }
         });
+    })
+    .put(function (req, res) {
+        if (redirectIfNotLoggedIn(req, res)) return;
+
+        const finishedWorks = req.body.finishedWorks;
+
+        mongoose.model('Project').findById(req.params.id, function (err, project) {
+            project.update({
+                finishedWorks: finishedWorks,
+            }, function (err, projectId) {
+                if (err) {
+                    res.send("There was a problem updating the information to the database: " + err);
+                } else {
+                    res.format({
+                        html: function () {
+                            res.redirect("/projects/my");
+                        }
+                    });
+                }
+            })
+        });
     });
+
+function redirectIfNotLoggedIn(req, res) {
+    if (!req.session.uid) {
+        res.redirect('/login');
+        return true;
+    }
+    return false;
+}
 
 module.exports = router;

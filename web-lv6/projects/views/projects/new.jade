@@ -16,9 +16,6 @@ block content
 				label(for=price) Price:
 					input#inputPrice(type="number", placeholder="100", name="price" class="form-control" required)
 			div(class="form-group row")
-				label(for=members) Members:
-					input#inputMembers(type="text", placeholder="Members", name="members" class="form-control" required)
-			div(class="form-group row")
 				label(for=finishedWorks) Finished Works:
 					input#inputFinishedWorks(type="text", placeholder="Finished Works", name="finishedWorks" class="form-control" required)
 			div(class="form-group row")
@@ -27,5 +24,14 @@ block content
 			div(class="form-group row")
 				label(for=endTime) End Time:
 					input#inputEndTime(type="date", name="endTime" class="form-control" required)
-				p
-					button#btnSubmit(type="submit" class="btn btn-primary") SUBMIT
+			input#inputArchived(type="checkbox", name="archived")
+			label(for=archived) Archived
+			div(class="form-group row")
+				p Members
+					#members
+						- each user, i in users
+							div(class="form-check")
+								input#inputMember(type="checkbox", name="member[]", value=user.username)
+								label(for=member)=user.username
+			p
+				button#btnSubmit(type="submit" class="btn btn-primary") SUBMIT
